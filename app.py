@@ -6,12 +6,11 @@ import logging
 app = Flask(__name__)
 CORS(app)
 
-# Set up logging to see errors in Render
 logging.basicConfig(level=logging.DEBUG)
 
 @app.route('/')
 def home():
-    return "SonicFlow Python Engine is Ready!"
+    return "SonicFlow Python Engine (Android Mode) is Ready!"
 
 @app.route('/convert')
 def convert():
@@ -22,28 +21,35 @@ def convert():
     print(f"Processing: {video_url}")
 
     try:
-        # yt-dlp options for direct audio stream
-        # We use 'bestaudio[ext=m4a]' to get high quality AAC audio
-        # This plays on Android/iOS natively and doesn't need FFmpeg
+        # Configuration to impersonate an Android Device
         ydl_opts = {
             'format': 'bestaudio[ext=m4a]/bestaudio',
             'noplaylist': True,
             'quiet': True,
             'no_warnings': True,
+            # THIS IS THE MAGIC FIX:
+            'extractor_args': {
+                'youtube': {
+                    'player_client': ['android'],
+                    'player_skip': ['webpage', 'configs', 'js'], 
+                }
+            },
+            # Add headers to look like a real mobile browser
+            'http_headers': {
+                'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36',
+            }
         }
 
-        # 1. Get Video Title
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            # 1. Extract Info
             info = ydl.extract_info(video_url, download=False)
             title = info.get('title', 'audio').replace('"', '').replace("'", "")
-
-            # Get the actual stream URL
+            
+            # 2. Get the Direct Stream URL
             audio_url = info['url']
-            print(f"Found Stream for: {title}")
+            print(f"✅ Success! Found Stream for: {title}")
 
-        # 2. Stream it to the user
-        # We redirect the user directly to the Google/YouTube storage URL
-        # This is faster and puts 0 load on the server (No crashing!)
+        # 3. Redirect user to the stream
         return Response(
             status=302,
             headers={
@@ -53,7 +59,8 @@ def convert():
         )
 
     except Exception as e:
-        print(f"Error: {str(e)}")
+        print(f"❌ Error: {str(e)}")
+        # If Android fails, try iOS mode automatically
         return f"Server Error: {str(e)}", 500
 
 if __name__ == '__main__':
